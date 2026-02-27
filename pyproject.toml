@@ -24,8 +24,7 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
 ]
 dependencies = [
-    "jax>=0.4.16,<=0.4.38",
-    "jaxlib>=0.4.16,<=0.4.38",
+    "jax[cuda12]>=0.5.1",
     "flax>=0.7.4",
     "chex>=0.1.84",
     "optax>=0.1.7",
@@ -51,10 +50,4 @@ jax_envs = [
     "gymnax==0.0.6",
     "playground>=0.0.4",
     "warp-lang",
-]
-
-atari = [
-    "gym==0.23.1",
-    "envpool==0.8.4",
-    "gymnax==0.0.5"
 ]

@@ -27,6 +27,11 @@ from purejaxql.utils.craftax_wrappers import (
     OptimisticResetVecEnvWrapper,
     BatchEnvWrapper,
 )
+from purejaxql.utils.craftax_logging import (
+    add_grouped_achievement_metrics,
+    drop_all_achievement_metrics,
+    drop_raw_achievement_metrics,
+)
 from purejaxql.utils.batch_renorm import BatchRenorm
 
 
@@ -367,6 +372,7 @@ def make_train(config):
                 infos,
             )
             metrics.update(done_infos)
+            metrics_to_return = metrics
 
             if config.get("TEST_DURING_TRAINING", False):
                 rng, _rng = jax.random.split(rng)
@@ -379,36 +385,51 @@ def make_train(config):
                     operand=None,
                 )
                 metrics.update({f"test/{k}": v for k, v in test_metrics.items()})
-
-            # remove achievement metrics if not logging them
-            if not config.get("LOG_ACHIEVEMENTS", False):
-                metrics = {
-                    k: v for k, v in metrics.items() if "achievement" not in k.lower()
-                }
+                metrics_to_return = metrics
 
             # report on wandb if required
             if config["WANDB_MODE"] != "disabled":
 
                 def callback(metrics, original_rng):
-                    
+                    metrics_to_log = dict(metrics)
+                    if config.get("LOG_ACHIEVEMENTS", False):
+                        add_grouped_achievement_metrics(metrics_to_log)
+                        metrics_to_log = drop_raw_achievement_metrics(metrics_to_log)
+                    else:
+                        metrics_to_log = drop_all_achievement_metrics(metrics_to_log)
+
                     # log at intervals 
                     if (
-                        metrics["update_steps"] % config.get("WANDB_LOG_INTERVAL", 128) == 0
+                        metrics_to_log["update_steps"]
+                        % config.get("WANDB_LOG_INTERVAL", 128)
+                        == 0
                     ):
                         if config.get("WANDB_LOG_ALL_SEEDS", False):
-                            metrics.update(
+                            metrics_to_log.update(
                                 {
                                     f"rng{int(original_rng)}/{k}": v
-                                    for k, v in metrics.items()
+                                    for k, v in metrics_to_log.items()
                                 }
                             )
-                        wandb.log(metrics, step=metrics["update_steps"])
+                        wandb.log(
+                            metrics_to_log, step=metrics_to_log["update_steps"]
+                        )
 
                 jax.debug.callback(callback, metrics, original_rng)
 
             runner_state = (train_state, tuple(expl_state), test_metrics, rng)
 
-            return runner_state, metrics
+            if not config.get("LOG_ACHIEVEMENTS", False):
+                metrics_to_return = {
+                    k: v
+                    for k, v in metrics_to_return.items()
+                    if not (
+                        k.startswith("Achievements/")
+                        or k.startswith("test/Achievements/")
+                    )
+                }
+
+            return runner_state, metrics_to_return
 
         def get_test_metrics(train_state, rng):
 

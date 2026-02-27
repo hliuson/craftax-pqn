@@ -13,5 +13,8 @@ outputs/
 models*/
 renders*/
 
+slurm*/
+slurm_logs*/
+
 **.npz
 **.safetensors
